@@ -6,7 +6,7 @@
 #define AT45DB161D_H
 
 #include <inttypes.h>
-#include <SPI.h>
+#include "wirish.h"
 
 #include "at45db161d_commands.h"
 
@@ -106,7 +106,8 @@ class ATD45DB161D
 
 	public:
 		/** CTOR **/
-		ATD45DB161D();
+		ATD45DB161D(HardwareSPI *spi);
+		
 		/** DTOR **/
 		~ATD45DB161D();
 
@@ -310,22 +311,12 @@ class ATD45DB161D
 		inline uint8_t ResetPin       () const { return m_resetPin;        }
 		/** Get write protect (WP) pin **/
 		inline uint8_t WriteProtectPin() const { return m_writeProtectPin; }
-	
-		/**
-		 * @see begin
-		 * Kept for backward compatibility reasons
-		 **/
-		inline void Init(uint8_t csPin=SLAVESELECT, uint8_t resetPin=RESET, uint8_t wpPin=WP)
-		{
-			begin(csPin, resetPin, wpPin);
-		}
-		
+			
 	private:
+		HardwareSPI *m_SPI;
 		uint8_t m_chipSelectPin;   /**< Chip select pin (CS)   **/
 		uint8_t m_resetPin;        /**< Reset pin (RESET)      **/
 		uint8_t m_writeProtectPin; /**< Write protect pin (WP) **/		
-		uint8_t m_SPCR;            /**< SPI register backup    **/
-		uint8_t m_SPSR;            /**< SPI register backup    **/
 };
 
 /**
