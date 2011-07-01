@@ -229,7 +229,7 @@ class ATD45DB161D
 		 * @param sector Sector to erase
 		 * @warning UNTESTED
 		 **/
-		void SectoreErase(uint8_t sector);
+		void SectorErase(uint8_t sector);
 
 #ifdef CHIP_ERASE_ENABLED
 		/** 

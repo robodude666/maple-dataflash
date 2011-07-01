@@ -362,7 +362,7 @@ void ATD45DB161D::BlockErase(uint16_t block)
  * at45db161d and only one can be erased at one time.
  * @param sector Sector to erase (1-15)
  **/
-void ATD45DB161D::SectoreErase(uint8_t sector)
+void ATD45DB161D::SectorErase(uint8_t sector)
 {
 	DF_CS_deselect();    /* Make sure to toggle CS signal in order */
 	DF_CS_select();      /* to reset Dataflash command decoder     */
