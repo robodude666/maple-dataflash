@@ -16,13 +16,13 @@ __attribute__((constructor)) void premain()
 int main()
 {
 	HardwareSPI SPI(1);
-	ATD45DB161D dataflash(&SPI); // A reference to our HardwareSPI interface is required.
+	AT45DB161D dataflash(&SPI); // A reference to our HardwareSPI interface is required.
 	
 	uint8_t loop_cnt;
 	uint16_t page;
 	
 	uint8_t status;
-	ATD45DB161D::ID id;
+	AT45DB161D::ID id;
 		
 	uint16_t i, j;
 	char message[] = "@ write test ";
@@ -81,7 +81,7 @@ int main()
 
 		/* Set dataflash so that any call to spi_tranfer will write the byte
 		* given as argument to the Buffer 1 */
-		dataflash.BufferWrite(1, 0);
+		dataflash.BufferWrite(DATAFLASH_BUFFER1, 0);
 
 		/* Transfer the message */
 		for(i = 0; message[i] != '\0'; ++i)
@@ -113,7 +113,7 @@ int main()
 		SPI.transfer('\0');
 
 		/* Transfer buffer 1 to 'page' page (with builtin erase) */
-		dataflash.BufferToPage(1, page, 1);	
+		dataflash.BufferToPage(DATAFLASH_BUFFER1, page, 1);	
 
 		++page;
 		/* When we wrote the number of pages we wanted (NUM_PAGES), we display their contents by
@@ -128,8 +128,8 @@ int main()
 				if(i & 1)
 				{
 					SerialUSB.println("Page to buffer");
-					dataflash.PageToBuffer(i, 1);    
-					dataflash.BufferRead(1, 0, true);
+					dataflash.PageToBuffer(i, DATAFLASH_BUFFER1);
+					dataflash.BufferRead(DATAFLASH_BUFFER1, 0);
 				}
 				else
 				{   

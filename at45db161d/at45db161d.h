@@ -41,55 +41,17 @@
  * @} 
  **/
 
-/**
- * @defgroup STATUS_REGISTER_FORMAT Status register format
- * @{
- **/
-/**
- * Ready/busy status is indicated using bit 7 of the status register.
- * If bit 7 is a 1, then the device is not busy and is ready to accept
- * the next command. If bit 7 is a 0, then the device is in a busy 
- * state.
- **/
-#define READY_BUSY 0x80
-/**
- * Result of the most recent Memory Page to Buffer Compare operation.
- * If this bit is equal to 0, then the data in the main memory page
- * matches the data in the buffer. If it's 1 then at least 1 byte in 
- * the main memory page does not match the data in the buffer.
- **/
-#define COMPARE 0x40
-/**
- * Bit 1 in the Status Register is used to provide information to the
- * user whether or not the sector protection has been enabled or
- * disabled, either by software-controlled method or 
- * hardware-controlled method. 1 means that the sector protection has
- * been enabled and 0 that it has been disabled.
- **/
-#define PROTECT 0x02
-/**
- * Bit 0 indicates whether the page size of the main memory array is
- * configured for "power of 2" binary page size (512 bytes) (bit=1) or 
- * standard DataFlash page size (528 bytes) (bit=0).
- **/
-#define PAGE_SIZE 0x01
-/**
- * Bits 5, 4, 3 and 2 indicates the device density. The decimal value
- * of these four binary bits does not equate to the device density; the
- * four bits represent a combinational code relating to differing
- * densities of DataFlash devices. The device density is not the same
- * as the density code indicated in the JEDEC device ID information.
- * The device density is provided only for backward compatibility.
- **/
-#define DEVICE_DENSITY 0x2C 
-/**
- * @}
- **/
+
+typedef enum dataflash_buffer
+{
+	DATAFLASH_BUFFER1 = 1,
+	DATAFLASH_BUFFER2 = 2
+} dataflash_buffer;
 
 /**
  * @brief at45db161d module
  **/
-class ATD45DB161D
+class AT45DB161D
 {
 	public:
 		/** 
@@ -106,10 +68,10 @@ class ATD45DB161D
 
 	public:
 		/** CTOR **/
-		ATD45DB161D(HardwareSPI *spi);
+		AT45DB161D(HardwareSPI *spi);
 		
 		/** DTOR **/
-		~ATD45DB161D();
+		~AT45DB161D();
 
 		/** 
  		 * Setup pinout and set SPI configuration
@@ -117,7 +79,7 @@ class ATD45DB161D
  		 * @param resetPin Reset pin (RESET)
  		 * @param wpPin Write protect pin (WP)
  		 * **/
-		void begin(uint8_t csPin=SLAVESELECT, uint8_t resetPin=RESET, uint8_t wpPin=WP);
+		void begin(uint8_t csPin = SLAVESELECT, uint8_t resetPin = RESET, uint8_t wpPin = WP);
 		
 		/**
 		 * Disable device and restore SPI configuration
@@ -153,7 +115,7 @@ class ATD45DB161D
 		 *       the extended device information string bytes.
 		 * @param id Pointer to the ID structure to initialize
 		 **/
-		void ReadManufacturerAndDeviceID(struct ATD45DB161D::ID *id);
+		void ReadManufacturerAndDeviceID(struct AT45DB161D::ID *id);
 		
 		/** 
 		 * A main memory page read allows the user to read data directly from
@@ -168,19 +130,17 @@ class ATD45DB161D
 		 * Sequentially read a continuous stream of data.
 		 * @param page Page of the main memory where the sequential read will start
 		 * @param offset Starting byte address within the page
-		 * @param low If true the read operation will be performed in low speed mode (and in high speed mode if it's false).
 		 * @note The legacy mode is not currently supported
 		 * @warning UNTESTED
 		 **/
-		void ContinuousArrayRead(uint16_t page, uint16_t offset, uint8_t low);
+		void ContinuousArrayRead(uint16_t page, uint16_t offset);
 
 		/** 
 		 * Read the content of one of the SRAM data buffers (in low or high speed mode).
 		 * @param bufferNum Buffer to read (1 or 2)
 		 * @param offset Starting byte within the buffer
-		 * @param low If true the read operation will be performed in low speed mode (and in high speed mode if it's false).
 		 **/
-		void BufferRead(uint8_t bufferNum, uint16_t offset, uint8_t low);
+		void BufferRead(dataflash_buffer bufferNum, uint16_t offset);
 
 		/** 
 		 * Write data to one of the SRAM data buffers. Any further call to
@@ -191,7 +151,7 @@ class ATD45DB161D
 		 * @param bufferNum Buffer to read (1 or 2)
 		 * @param offset Starting byte within the buffer
 		 **/
-		void BufferWrite(uint8_t bufferNum, uint16_t offset);
+		void BufferWrite(dataflash_buffer bufferNum, uint16_t offset);
 		
 		/**
 		 * Transfer data from buffer 1 or 2 to main memory page.
@@ -200,14 +160,14 @@ class ATD45DB161D
 		 * @param erase If set the page will be first erased before the buffer transfer.
 		 * @note If erase is equal to zero, the page must have been previously erased using one of the erase command (Page or Block Erase).
 		 **/
-		void BufferToPage(uint8_t bufferNum, uint16_t page, uint8_t erase);		
+		void BufferToPage(dataflash_buffer bufferNum, uint16_t page, uint8_t erase);		
 
 		/**
 		 * Transfer a page of data from main memory to buffer 1 or 2.
 		 * @param page Main memory page to transfer
 		 * @param bufferNum Buffer (1 or 2) where the data will be written
 		 **/
-		void PageToBuffer(uint16_t page, uint8_t bufferNum);
+		void PageToBuffer(uint16_t page, dataflash_buffer bufferNum);
 
 		/** 
 		 * Erase a page in the main memory array.
@@ -250,7 +210,7 @@ class ATD45DB161D
 		 * @param bufferNum Buffer to use (1 or 2)
 		 * @warning UNTESTED
 		 **/
-		void BeginPageWriteThroughBuffer(uint16_t page, uint16_t offset, uint8_t bufferNum);
+		void BeginPageWriteThroughBuffer(uint16_t page, uint16_t offset, dataflash_buffer bufferNum);
 		
 		/**
 		 * Perform a low-to-high transition on the CS pin and then poll
@@ -267,7 +227,7 @@ class ATD45DB161D
 		 * 		- 0 else
 		 * @warning UNTESTED
 		 **/
-		int8_t ComparePageToBuffer(uint16_t page, uint8_t bufferNum);
+		int8_t ComparePageToBuffer(uint16_t page, dataflash_buffer bufferNum);
 
 		/**
 		 * Put the device into the lowest power consumption mode.
