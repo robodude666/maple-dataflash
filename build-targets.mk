@@ -1,4 +1,4 @@
-TARGET_MAIN = main-pageTest
+TARGET_MAIN = main-Benchmark
 
 OBJECTS = $(BUILD_PATH)/at45db161d/at45db161d.o
 
