@@ -175,13 +175,13 @@ int main()
 	#define calculateDataRate(bytes, time_us) ((float)bytes * (1000000.0 / (float)(time_us)))
 
 	Serial2.println("Benchmark 1 - Write via Buffer:");
-	Serial2.print("    Time: "); Serial2.print(read_page_time); Serial2.println(" uS.");
+	Serial2.print("    Time: "); Serial2.print(write_time); Serial2.println(" uS.");
 	Serial2.print("    Wrote: "); Serial2.print(bytes_transfered); Serial2.println(" bytes.");
 	Serial2.print("    Write Speed: "); Serial2.print(calculateDataRate(bytes_transfered, write_time)); Serial2.println(" Bps.");
 	Serial2.println();
 
 	Serial2.println("Benchmark 2 - Read via Buffer:");
-	Serial2.print("    Time: "); Serial2.print(read_page_time); Serial2.println(" uS.");
+	Serial2.print("    Time: "); Serial2.print(read_buffer_time); Serial2.println(" uS.");
 	Serial2.print("    Read: "); Serial2.print(bytes_transfered); Serial2.println(" bytes.");
 	Serial2.print("    Errors: "); Serial2.print(read_buffer_errors); Serial2.println(" errors.");
 	Serial2.print("    Read Speed: "); Serial2.print(calculateDataRate(bytes_transfered, read_buffer_time)); Serial2.println(" Bps.");
