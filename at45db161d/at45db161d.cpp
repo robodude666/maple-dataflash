@@ -4,6 +4,11 @@
 #define DF_CS_deselect() gpio_write_bit(m_chipSelectGPIO, m_chipSelectPin, 1)
 #define DF_CS_select() gpio_write_bit(m_chipSelectGPIO, m_chipSelectPin, 0)
 
+/**
+ * Constructor. Calls the corresponding begin function with pin definitions.
+ * @param spi Reference to HardwareSPI that the Dataflash module is connected to
+ * @note Calling begin manually is required with the use of this constructor.
+ **/
 AT45DB161D::AT45DB161D(HardwareSPI *spi)
 {
 	m_SPI = spi;
@@ -11,6 +16,14 @@ AT45DB161D::AT45DB161D(HardwareSPI *spi)
 	begin(DATAFLASH_DEFAULT_CS, DATAFLASH_DEFAULT_RESET, DATAFLASH_DEFAULT_WP);
 }
 
+/**
+ * Constructor. Calls the corresponding begin function with pin definitions.
+ * @param spi Reference to HardwareSPI that the Dataflash module is connected to
+ * @param csPin Chip select (Slave select) pin (CS)
+ * @param resetPin Reset pin (RESET)
+ * @param wpPin Write protect pin (WP)
+ * @note Calling begin manually is not required with the use of this constructor.
+ **/
 AT45DB161D::AT45DB161D(HardwareSPI *spi, uint8_t csPin, uint8_t resetPin, uint8_t wpPin)
 {
 	m_SPI = spi;
@@ -18,6 +31,16 @@ AT45DB161D::AT45DB161D(HardwareSPI *spi, uint8_t csPin, uint8_t resetPin, uint8_
 	begin(csPin, resetPin, wpPin);
 }
 
+/**
+ * Constructor. Calls the corresponding begin function with pin definitions.
+ * @param cs_dev GPIO the Chip/Slave Select pin is located on.
+ * @param cs_pin Bit within the cs_dev GPIO the Chip/Slave Select pin is located on.
+ * @param reset_dev GPIO the reset pin is located on.
+ * @param reset_pin Bit within the reset_dev GPIO the reset pin is located on.
+ * @param wp_dev GPIO the Write Protect pin is located on.
+ * @param wp_pin Bit within the wp_dev GPIO the Write Protect pin is located on.
+ * @note Calling begin manually is not required with the use of this constructor.
+ **/
 AT45DB161D::AT45DB161D(HardwareSPI *spi, gpio_dev *cs_dev, uint8_t cs_pin, gpio_dev *reset_dev, uint8_t reset_pin, gpio_dev *wp_dev, uint8_t wp_pin)
 {
 	m_SPI = spi;
@@ -25,17 +48,20 @@ AT45DB161D::AT45DB161D(HardwareSPI *spi, gpio_dev *cs_dev, uint8_t cs_pin, gpio_
 	begin(cs_dev, cs_pin, reset_dev, reset_pin, wp_dev, wp_pin);
 }
 
+/**
+ * Deconstructor
+ **/
 AT45DB161D::~AT45DB161D()
 {
 	m_SPI = NULL;	
 }
 	
 /** 
- * Setup pinout and set SPI configuration
+ * Setup pinout for DataFlash using wirish pin numbers.
  * @param csPin Chip select (Slave select) pin (CS)
  * @param resetPin Reset pin (RESET)
  * @param wpPin Write protect pin (WP)
- * **/
+ **/
 void AT45DB161D::begin(uint8_t csPin, uint8_t resetPin, uint8_t wpPin)
 {
 	
@@ -50,9 +76,15 @@ void AT45DB161D::begin(uint8_t csPin, uint8_t resetPin, uint8_t wpPin)
 		  PIN_MAP[wpPin].gpio_device, 	 PIN_MAP[wpPin].gpio_bit);
 }
 
-/** 
- * REWRITE
- * **/
+/**
+ * Setup pinout for DataFlash using libmaple GPIO & pin numbers.
+ * @param cs_dev GPIO the Chip/Slave Select pin is located on.
+ * @param cs_pin Bit within the cs_dev GPIO the Chip/Slave Select pin is located on.
+ * @param reset_dev GPIO the reset pin is located on.
+ * @param reset_pin Bit within the reset_dev GPIO the reset pin is located on.
+ * @param wp_dev GPIO the Write Protect pin is located on.
+ * @param wp_pin Bit within the wp_dev GPIO the Write Protect pin is located on.
+ **/
 void AT45DB161D::begin(gpio_dev *cs_dev, uint8_t cs_pin, gpio_dev *reset_dev, uint8_t reset_pin, gpio_dev *wp_dev, uint8_t wp_pin)
 {
 	
@@ -143,6 +175,9 @@ uint8_t AT45DB161D::ReadStatusRegister()
 	return status;
 }
 
+/**
+ * Reads status register and waits for Dataflash to be ready.
+ **/
 void AT45DB161D::WaitForReady()
 {
 	uint8_t status = ReadStatusRegister();
@@ -641,6 +676,9 @@ void AT45DB161D::ResumeFromDeepPowerDown()
 	delay(100);
 }
 
+/**
+ * Reset device via the reset pin.
+ **/
 void AT45DB161D::HardReset()
 {
 	gpio_write_bit(m_resetGPIO, m_resetPin, 0);
@@ -652,6 +690,7 @@ void AT45DB161D::HardReset()
 	 * the CS pin should be in high state before RESET
 	 * is deasserted (ie HIGH) */
 	DF_CS_deselect();
+	
 	/* Just to be sure that the high state is reached */
 	delayMicroseconds(1);
 	

@@ -2,8 +2,8 @@
  * @file at45db161d.h
  * @brief AT45DB161D module
  **/
-#ifndef AT45DB161D_H
-#define AT45DB161D_H
+#ifndef _AT45DB161D_H_
+#define _AT45DB161D_H_
 
 #include <inttypes.h>
 #include "wirish.h"
@@ -88,6 +88,9 @@
  * @}
  **/
 
+/**
+ * Enum used to identify buffer 1 and buffer 2 in method parameters.
+ **/
 typedef enum dataflash_buffer
 {
 	DATAFLASH_BUFFER1 = 1,
@@ -113,23 +116,57 @@ class AT45DB161D
 		};
 
 	public:
+		/**
+		 * Constructor. Calls the corresponding begin function with pin definitions.
+		 * @param spi Reference to HardwareSPI that the Dataflash module is connected to
+		 * @note Calling begin manually is required with the use of this constructor.
+		 **/
 		AT45DB161D(HardwareSPI *spi);
 		
+		/**
+		 * Constructor. Calls the corresponding begin function with pin definitions.
+		 * @param spi Reference to HardwareSPI that the Dataflash module is connected to
+		 * @param csPin Chip select (Slave select) pin (CS)
+		 * @param resetPin Reset pin (RESET)
+		 * @param wpPin Write protect pin (WP)
+		 * @note Calling begin manually is not required with the use of this constructor.
+		 **/
 		AT45DB161D(HardwareSPI *spi, uint8_t csPin, uint8_t resetPin, uint8_t wpPin);
-		
+
+		/**
+		 * Constructor. Calls the corresponding begin function with pin definitions.
+		 * @param cs_dev GPIO the Chip/Slave Select pin is located on.
+		 * @param cs_pin Bit within the cs_dev GPIO the Chip/Slave Select pin is located on.
+		 * @param reset_dev GPIO the reset pin is located on.
+		 * @param reset_pin Bit within the reset_dev GPIO the reset pin is located on.
+		 * @param wp_dev GPIO the Write Protect pin is located on.
+		 * @param wp_pin Bit within the wp_dev GPIO the Write Protect pin is located on.
+		 * @note Calling begin manually is not required with the use of this constructor.
+		 **/
 		AT45DB161D(HardwareSPI *spi, gpio_dev *cs_dev, uint8_t cs_pin, gpio_dev *reset_dev, uint8_t reset_pin, gpio_dev *wp_dev, uint8_t wp_pin);
 		
-		
+		/**
+		 * Deconstructor
+		 **/
 		~AT45DB161D();
 
 		/** 
- 		 * Setup pinout and set SPI configuration
+ 		 * Setup pinout for DataFlash using wirish pin numbers.
  		 * @param csPin Chip select (Slave select) pin (CS)
  		 * @param resetPin Reset pin (RESET)
  		 * @param wpPin Write protect pin (WP)
  		 * **/
 		void begin(uint8_t csPin = DATAFLASH_DEFAULT_CS, uint8_t resetPin = DATAFLASH_DEFAULT_RESET, uint8_t wpPin = DATAFLASH_DEFAULT_WP);
 		
+		/**
+		 * Setup pinout for DataFlash using libmaple GPIO & pin numbers.
+		 * @param cs_dev GPIO the Chip/Slave Select pin is located on.
+		 * @param cs_pin Bit within the cs_dev GPIO the Chip/Slave Select pin is located on.
+		 * @param reset_dev GPIO the reset pin is located on.
+		 * @param reset_pin Bit within the reset_dev GPIO the reset pin is located on.
+		 * @param wp_dev GPIO the Write Protect pin is located on.
+		 * @param wp_pin Bit within the wp_dev GPIO the Write Protect pin is located on.
+		 **/
 		void begin(gpio_dev *cs_dev, uint8_t cs_pin, gpio_dev *reset_dev, uint8_t reset_pin, gpio_dev *wp_dev, uint8_t wp_pin);
 								
 		/**
@@ -159,8 +196,6 @@ class AT45DB161D
 		 * **/
 		uint8_t ReadStatusRegister();
 		
-		void WaitForReady();
-
 		/** 
 		 * Read Manufacturer and Device ID 
 		 * @note if id.extendedInfoLength is not equal to zero,
@@ -317,18 +352,24 @@ class AT45DB161D
 		{
 			gpio_write_bit(m_writeProtectGPIO, m_writeProtectPin, 1);
 		}
+		
+	private:
+		/**
+		 * Reads status register and waits for Dataflash to be ready.
+		 **/
+		void WaitForReady();
 					
 	private:
 		HardwareSPI *m_SPI;
 		
-		gpio_dev *m_chipSelectGPIO;
-		uint8_t m_chipSelectPin;	/**< Chip select pin (CS)   **/
+		gpio_dev *m_chipSelectGPIO;		/**< Chip select GPIO (CS)   **/
+		uint8_t m_chipSelectPin;		/**< Chip select pin (CS)    **/
 
-		gpio_dev *m_resetGPIO;
-		uint8_t m_resetPin;			/**< Reset pin (RESET)      **/
+		gpio_dev *m_resetGPIO;			/**< Reset GPIO (RESET)      **/
+		uint8_t m_resetPin;				/**< Reset pin (RESET)       **/
 
-		gpio_dev *m_writeProtectGPIO;
-		uint8_t m_writeProtectPin;	/**< Write protect pin (WP) **/
+		gpio_dev *m_writeProtectGPIO;	/**< Write protect GPIO (WP) **/
+		uint8_t m_writeProtectPin;		/**< Write protect pin (WP)  **/
 };
 
 /**
