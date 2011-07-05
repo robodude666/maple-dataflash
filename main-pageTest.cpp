@@ -16,7 +16,7 @@ __attribute__((constructor)) void premain()
 int main()
 {
 	HardwareSPI SPI(1);
-	AT45DB161D dataflash(&SPI); // A reference to our HardwareSPI interface is required.
+	AT45DB161D dataflash(&SPI, 5, 6, 7); // A reference to our HardwareSPI interface is required.
 	
 	uint8_t loop_cnt;
 	uint16_t page;
@@ -31,12 +31,10 @@ int main()
 
 	/* Initialize SPI */
 	SPI.begin();
+	Serial2.begin(9600);
 
 	/* Let's wait 1 second, allowing use to press the serial monitor button :p */
 	delay(1000);
-
-	/* Initialize dataflash */
-	dataflash.begin(5, 6, 7); // CS, Reset, WP
 
 	delay(10);
 
@@ -46,32 +44,27 @@ int main()
 	/* Read manufacturer and device ID */
 	dataflash.ReadManufacturerAndDeviceID(&id);
 
-	/* Small delay to make sure we don't miss any action
-	 * while connecting to the SerialUSB port
-	 */
-	delay(10000);
-
 	/* Display status register */
-	SerialUSB.print("Status register: 0b");
-	SerialUSB.print(status, BIN);
-	SerialUSB.print('\n');
+	Serial2.print("Status register: 0b");
+	Serial2.print(status, BIN);
+	Serial2.print('\n');
 
 	/* Display manufacturer and device ID */
-	SerialUSB.print("Manufacturer ID: 0x");  // Should be 0x1F
-	SerialUSB.print(id.manufacturer, HEX);
-	SerialUSB.print('\n');
+	Serial2.print("Manufacturer ID: 0x");  // Should be 0x1F
+	Serial2.print(id.manufacturer, HEX);
+	Serial2.print('\n');
 
-	SerialUSB.print("Device ID (part 1): 0x"); // Should be 0x26
-	SerialUSB.print(id.device[0], HEX);
-	SerialUSB.print('\n');
+	Serial2.print("Device ID (part 1): 0x"); // Should be 0x26
+	Serial2.print(id.device[0], HEX);
+	Serial2.print('\n');
 
-	SerialUSB.print("Device ID (part 2): 0x"); // Should be 0x00
-	SerialUSB.print(id.device[1], HEX);
-	SerialUSB.print('\n');
+	Serial2.print("Device ID (part 2): 0x"); // Should be 0x00
+	Serial2.print(id.device[1], HEX);
+	Serial2.print('\n');
 
-	SerialUSB.print("Extended Device Information String Length: 0x"); // 0x00
-	SerialUSB.print(id.extendedInfoLength, HEX);
-	SerialUSB.print('\n');
+	Serial2.print("Extended Device Information String Length: 0x"); // 0x00
+	Serial2.print(id.extendedInfoLength, HEX);
+	Serial2.print('\n');
 
 	loop_cnt = 0;
 	page = 0;
@@ -127,13 +120,13 @@ int main()
 			{
 				if(i & 1)
 				{
-					SerialUSB.println("Page to buffer");
+					Serial2.println("Page to buffer");
 					dataflash.PageToBuffer(i, DATAFLASH_BUFFER1);
 					dataflash.BufferRead(DATAFLASH_BUFFER1, 0);
 				}
 				else
 				{   
-					SerialUSB.println("Page read");
+					Serial2.println("Page read");
 					dataflash.ReadMainMemoryPage(i, 0); 
 				}
 
@@ -141,7 +134,7 @@ int main()
 				{
 					data = SPI.transfer(0xff);
 					if(data != '\0')
-						SerialUSB.print((char)data);
+						Serial2.print((char)data);
 				}while(data != '\0');
 
 				/* Add a little delay otherwise the display will be too fast */   

@@ -8,6 +8,8 @@
 #include <inttypes.h>
 #include "wirish.h"
 
+#include "gpio.h"
+
 #include "at45db161d_commands.h"
 
 /**
@@ -32,15 +34,59 @@
  * @{
  **/
 /** Chip select (CS) **/
-#define SLAVESELECT 10
+#define DATAFLASH_DEFAULT_CS	5
 /** Reset (Reset) **/
-#define RESET        8
+#define DATAFLASH_DEFAULT_RESET	6
 /** Write protect (WP) **/
-#define WP           7
+#define DATAFLASH_DEFAULT_WP	7
 /**
  * @} 
  **/
 
+/**
+ * @defgroup STATUS_REGISTER_FORMAT Status register format
+ * @{
+ **/
+/**
+ * Ready/busy status is indicated using bit 7 of the status register.
+ * If bit 7 is a 1, then the device is not busy and is ready to accept
+ * the next command. If bit 7 is a 0, then the device is in a busy 
+ * state.
+ **/
+#define DATAFLASH_STATUS_READY_BUSY 0x80
+/**
+ * Result of the most recent Memory Page to Buffer Compare operation.
+ * If this bit is equal to 0, then the data in the main memory page
+ * matches the data in the buffer. If it's 1 then at least 1 byte in 
+ * the main memory page does not match the data in the buffer.
+ **/
+#define DATAFLASH_STATUS_COMPARE 0x40
+/**
+ * Bit 1 in the Status Register is used to provide information to the
+ * user whether or not the sector protection has been enabled or
+ * disabled, either by software-controlled method or 
+ * hardware-controlled method. 1 means that the sector protection has
+ * been enabled and 0 that it has been disabled.
+ **/
+#define DATAFLASH_STATUS_PROTECT 0x02
+/**
+ * Bit 0 indicates whether the page size of the main memory array is
+ * configured for "power of 2" binary page size (512 bytes) (bit=1) or 
+ * standard DataFlash page size (528 bytes) (bit=0).
+ **/
+#define DATAFLASH_STATUS_PAGE_SIZE 0x01
+/**
+ * Bits 5, 4, 3 and 2 indicates the device density. The decimal value
+ * of these four binary bits does not equate to the device density; the
+ * four bits represent a combinational code relating to differing
+ * densities of DataFlash devices. The device density is not the same
+ * as the density code indicated in the JEDEC device ID information.
+ * The device density is provided only for backward compatibility.
+ **/
+#define DATAFLASH_STATUS_DEVICE_DENSITY 0x2C 
+/**
+ * @}
+ **/
 
 typedef enum dataflash_buffer
 {
@@ -67,10 +113,13 @@ class AT45DB161D
 		};
 
 	public:
-		/** CTOR **/
 		AT45DB161D(HardwareSPI *spi);
 		
-		/** DTOR **/
+		AT45DB161D(HardwareSPI *spi, uint8_t csPin, uint8_t resetPin, uint8_t wpPin);
+		
+		AT45DB161D(HardwareSPI *spi, gpio_dev *cs_dev, uint8_t cs_pin, gpio_dev *reset_dev, uint8_t reset_pin, gpio_dev *wp_dev, uint8_t wp_pin);
+		
+		
 		~AT45DB161D();
 
 		/** 
@@ -79,8 +128,10 @@ class AT45DB161D
  		 * @param resetPin Reset pin (RESET)
  		 * @param wpPin Write protect pin (WP)
  		 * **/
-		void begin(uint8_t csPin = SLAVESELECT, uint8_t resetPin = RESET, uint8_t wpPin = WP);
+		void begin(uint8_t csPin = DATAFLASH_DEFAULT_CS, uint8_t resetPin = DATAFLASH_DEFAULT_RESET, uint8_t wpPin = DATAFLASH_DEFAULT_WP);
 		
+		void begin(gpio_dev *cs_dev, uint8_t cs_pin, gpio_dev *reset_dev, uint8_t reset_pin, gpio_dev *wp_dev, uint8_t wp_pin);
+								
 		/**
 		 * Disable device and restore SPI configuration
 		 **/
@@ -91,7 +142,7 @@ class AT45DB161D
 		 **/
 		inline void Enable()
 		{
-			digitalWrite(m_chipSelectPin, LOW);
+			gpio_write_bit(m_chipSelectGPIO, m_chipSelectPin, 0);
 		}
 	
 		/**
@@ -99,7 +150,7 @@ class AT45DB161D
 		 **/
 		inline void Disable()
 		{
-			digitalWrite(m_chipSelectPin, HIGH);
+			gpio_write_bit(m_chipSelectGPIO, m_chipSelectPin, 1);
 		}
 		
 		/** 
@@ -107,6 +158,8 @@ class AT45DB161D
 		 * @return The content of the status register
 		 * **/
 		uint8_t ReadStatusRegister();
+		
+		void WaitForReady();
 
 		/** 
 		 * Read Manufacturer and Device ID 
@@ -254,7 +307,7 @@ class AT45DB161D
 		 **/
 		inline void EnableWriteProtection()
 		{
-			digitalWrite(m_writeProtectPin, LOW);
+			gpio_write_bit(m_writeProtectGPIO, m_writeProtectPin, 0);
 		}
 
 		/**
@@ -262,21 +315,20 @@ class AT45DB161D
 		 **/
 		inline void DisableWriteProtection()
 		{
-			digitalWrite(m_writeProtectPin, HIGH);
+			gpio_write_bit(m_writeProtectGPIO, m_writeProtectPin, 1);
 		}
-		
-		/** Get chip Select (CS) pin **/
-		inline uint8_t ChipSelectPin  () const { return m_chipSelectPin;   }
-		/** Get reset (RESET) pin **/
-		inline uint8_t ResetPin       () const { return m_resetPin;        }
-		/** Get write protect (WP) pin **/
-		inline uint8_t WriteProtectPin() const { return m_writeProtectPin; }
-			
+					
 	private:
 		HardwareSPI *m_SPI;
-		uint8_t m_chipSelectPin;   /**< Chip select pin (CS)   **/
-		uint8_t m_resetPin;        /**< Reset pin (RESET)      **/
-		uint8_t m_writeProtectPin; /**< Write protect pin (WP) **/		
+		
+		gpio_dev *m_chipSelectGPIO;
+		uint8_t m_chipSelectPin;	/**< Chip select pin (CS)   **/
+
+		gpio_dev *m_resetGPIO;
+		uint8_t m_resetPin;			/**< Reset pin (RESET)      **/
+
+		gpio_dev *m_writeProtectGPIO;
+		uint8_t m_writeProtectPin;	/**< Write protect pin (WP) **/
 };
 
 /**

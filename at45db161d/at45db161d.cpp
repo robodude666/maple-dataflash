@@ -1,67 +1,30 @@
 #include "at45db161d.h"
 #include "wirish.h"
 
-/**
- * @defgroup STATUS_REGISTER_FORMAT Status register format
- * @{
- **/
-/**
- * Ready/busy status is indicated using bit 7 of the status register.
- * If bit 7 is a 1, then the device is not busy and is ready to accept
- * the next command. If bit 7 is a 0, then the device is in a busy 
- * state.
- **/
-#define READY_BUSY 0x80
-/**
- * Result of the most recent Memory Page to Buffer Compare operation.
- * If this bit is equal to 0, then the data in the main memory page
- * matches the data in the buffer. If it's 1 then at least 1 byte in 
- * the main memory page does not match the data in the buffer.
- **/
-#define COMPARE 0x40
-/**
- * Bit 1 in the Status Register is used to provide information to the
- * user whether or not the sector protection has been enabled or
- * disabled, either by software-controlled method or 
- * hardware-controlled method. 1 means that the sector protection has
- * been enabled and 0 that it has been disabled.
- **/
-#define PROTECT 0x02
-/**
- * Bit 0 indicates whether the page size of the main memory array is
- * configured for "power of 2" binary page size (512 bytes) (bit=1) or 
- * standard DataFlash page size (528 bytes) (bit=0).
- **/
-#define PAGE_SIZE 0x01
-/**
- * Bits 5, 4, 3 and 2 indicates the device density. The decimal value
- * of these four binary bits does not equate to the device density; the
- * four bits represent a combinational code relating to differing
- * densities of DataFlash devices. The device density is not the same
- * as the density code indicated in the JEDEC device ID information.
- * The device density is provided only for backward compatibility.
- **/
-#define DEVICE_DENSITY 0x2C 
-/**
- * @}
- **/
+#define DF_CS_deselect() gpio_write_bit(m_chipSelectGPIO, m_chipSelectPin, 1)
+#define DF_CS_select() gpio_write_bit(m_chipSelectGPIO, m_chipSelectPin, 0)
 
-/* De-assert CS */
-#define DF_CS_deselect() digitalWrite(m_chipSelectPin, HIGH)
-
-/* Assert CS */
-#define DF_CS_select() digitalWrite(m_chipSelectPin, LOW)
-
-/** CTOR **/
-AT45DB161D::AT45DB161D(HardwareSPI *spi) :
-	m_chipSelectPin   (SLAVESELECT),
-	m_resetPin        (RESET),
-	m_writeProtectPin (WP)
+AT45DB161D::AT45DB161D(HardwareSPI *spi)
 {
 	m_SPI = spi;
+	
+	begin(DATAFLASH_DEFAULT_CS, DATAFLASH_DEFAULT_RESET, DATAFLASH_DEFAULT_WP);
 }
 
-/** DTOR **/
+AT45DB161D::AT45DB161D(HardwareSPI *spi, uint8_t csPin, uint8_t resetPin, uint8_t wpPin)
+{
+	m_SPI = spi;
+	
+	begin(csPin, resetPin, wpPin);
+}
+
+AT45DB161D::AT45DB161D(HardwareSPI *spi, gpio_dev *cs_dev, uint8_t cs_pin, gpio_dev *reset_dev, uint8_t reset_pin, gpio_dev *wp_dev, uint8_t wp_pin)
+{
+	m_SPI = spi;
+	
+	begin(cs_dev, cs_pin, reset_dev, reset_pin, wp_dev, wp_pin);
+}
+
 AT45DB161D::~AT45DB161D()
 {
 	m_SPI = NULL;	
@@ -75,18 +38,77 @@ AT45DB161D::~AT45DB161D()
  * **/
 void AT45DB161D::begin(uint8_t csPin, uint8_t resetPin, uint8_t wpPin)
 {
+	
+	if(csPin >= BOARD_NR_GPIO_PINS || resetPin >= BOARD_NR_GPIO_PINS || wpPin >= BOARD_NR_GPIO_PINS)
+	{
+		ASSERT(0);
+		return;
+	}
+	
+	begin(PIN_MAP[csPin].gpio_device, 	 PIN_MAP[csPin].gpio_bit,
+		  PIN_MAP[resetPin].gpio_device, PIN_MAP[resetPin].gpio_bit,
+		  PIN_MAP[wpPin].gpio_device, 	 PIN_MAP[wpPin].gpio_bit);
+}
 
-	m_chipSelectPin   = csPin;
-	m_resetPin        = resetPin;
-	m_writeProtectPin = wpPin;
+/** 
+ * REWRITE
+ * **/
+void AT45DB161D::begin(gpio_dev *cs_dev, uint8_t cs_pin, gpio_dev *reset_dev, uint8_t reset_pin, gpio_dev *wp_dev, uint8_t wp_pin)
+{
 	
-	pinMode(m_chipSelectPin,   OUTPUT);
-	pinMode(m_resetPin,        OUTPUT);
-	pinMode(m_writeProtectPin, OUTPUT);
+	bool cs_configured = false;
+	bool reset_configured = false;
+	bool wp_configured = false;
+	bool disable_timer = false;
 	
-	digitalWrite(m_resetPin,        HIGH);
-	digitalWrite(m_writeProtectPin, LOW);
+	m_chipSelectGPIO = cs_dev;
+	m_chipSelectPin   = cs_pin;
 	
+	m_resetGPIO = reset_dev;
+	m_resetPin   = reset_pin;
+	
+	m_writeProtectGPIO = wp_dev;
+	m_writeProtectPin   = wp_pin;
+	
+	// Set the pins to Output
+	gpio_set_mode(m_chipSelectGPIO, m_chipSelectPin, GPIO_OUTPUT_PP);
+	gpio_set_mode(m_resetGPIO, m_resetPin, GPIO_OUTPUT_PP);
+	gpio_set_mode(m_writeProtectGPIO, m_writeProtectPin, GPIO_OUTPUT_PP);
+	
+	// Loop through PIN_MAP array and find out which of these is a timer.
+	// TODO: HAX! Find a better way.
+	for(uint8_t i = 0; i < BOARD_NR_GPIO_PINS; i++)
+	{
+		if(cs_configured && reset_configured && wp_configured) break;
+		
+		stm32_pin_info pin_info = PIN_MAP[i];
+		if(cs_configured == false && pin_info.gpio_device == m_chipSelectGPIO && pin_info.gpio_bit == m_chipSelectPin)
+		{
+			cs_configured = true;
+			disable_timer = true;
+		}
+		else if(reset_configured == false && pin_info.gpio_device == m_resetGPIO && pin_info.gpio_bit == m_resetPin)
+		{
+			reset_configured = true;
+			disable_timer = true;
+		}
+		else if(wp_configured == false && pin_info.gpio_device == m_writeProtectGPIO && pin_info.gpio_bit == m_writeProtectPin)
+		{
+			wp_configured = true;
+			disable_timer = true;
+		}
+		
+		if(disable_timer)
+		{
+			disable_timer = false;
+			if(pin_info.timer_device != NULL)
+				timer_set_mode(pin_info.timer_device, pin_info.timer_channel, TIMER_DISABLED);
+		}
+	}
+    
+	gpio_write_bit(m_resetGPIO, m_resetPin, 1);
+	gpio_write_bit(m_writeProtectGPIO, m_writeProtectPin, 0);
+			
 	/* Enable device */
   	DF_CS_select();
 }
@@ -119,6 +141,16 @@ uint8_t AT45DB161D::ReadStatusRegister()
 	status = m_SPI->transfer(0x00);
 
 	return status;
+}
+
+void AT45DB161D::WaitForReady()
+{
+	uint8_t status = ReadStatusRegister();
+		
+	while(!(status & DATAFLASH_STATUS_READY_BUSY))
+	{
+		status = m_SPI->transfer(0x00);
+	}
 }
 
 /** 
@@ -210,14 +242,13 @@ void AT45DB161D::BufferRead(dataflash_buffer bufferNum, uint16_t offset)
 	DF_CS_select();      /* to reset Dataflash command decoder     */
 
 	/* Send opcode */
-	if(bufferNum == 1)
+	if(bufferNum == DATAFLASH_BUFFER1)
 	{
 		m_SPI->transfer(AT45DB161D_BUFFER_1_READ_LOW_FREQ);
 	}
 	else
 	{
 		m_SPI->transfer(AT45DB161D_BUFFER_2_READ_LOW_FREQ);
-
 	}
 	
 	/* 14 "Don't care" bits */
@@ -242,8 +273,15 @@ void AT45DB161D::BufferWrite(dataflash_buffer bufferNum, uint16_t offset)
 	DF_CS_deselect();    /* Make sure to toggle CS signal in order */
 	DF_CS_select();      /* to reset Dataflash command decoder     */
 
-	m_SPI->transfer( (bufferNum == 1) ? AT45DB161D_BUFFER_1_WRITE :
-	                                 AT45DB161D_BUFFER_2_WRITE);
+	/* Send opcode */
+	if(bufferNum == DATAFLASH_BUFFER1)
+	{
+		m_SPI->transfer(AT45DB161D_BUFFER_1_WRITE);
+	}
+	else
+	{
+		m_SPI->transfer(AT45DB161D_BUFFER_2_WRITE);
+	}
 	
 	/* 14 "Don't care" bits */
 	m_SPI->transfer(0x00);
@@ -264,18 +302,20 @@ void AT45DB161D::BufferToPage(dataflash_buffer bufferNum, uint16_t page, uint8_t
 {
 	DF_CS_deselect();    /* Make sure to toggle CS signal in order */
 	DF_CS_select();      /* to reset Dataflash command decoder     */
+	
+	uint8_t opcode;
 
 	/* Opcode */
 	if(erase)
 	{
-		m_SPI->transfer( (bufferNum == 1) ? AT45DB161D_BUFFER_1_TO_PAGE_WITH_ERASE :
-	                                     AT45DB161D_BUFFER_2_TO_PAGE_WITH_ERASE);
+		opcode = (bufferNum == DATAFLASH_BUFFER1) ? AT45DB161D_BUFFER_1_TO_PAGE_WITH_ERASE : AT45DB161D_BUFFER_2_TO_PAGE_WITH_ERASE;
 	}
 	else
 	{
-		m_SPI->transfer( (bufferNum == 1) ? AT45DB161D_BUFFER_1_TO_PAGE_WITHOUT_ERASE :
-	                                     AT45DB161D_BUFFER_2_TO_PAGE_WITHOUT_ERASE);
+		opcode = (bufferNum == DATAFLASH_BUFFER1) ? AT45DB161D_BUFFER_1_TO_PAGE_WITHOUT_ERASE : AT45DB161D_BUFFER_2_TO_PAGE_WITHOUT_ERASE;
 	}
+	
+	m_SPI->transfer(opcode);
 	
 	/*
 	 * 3 address bytes consist of :
@@ -291,8 +331,7 @@ void AT45DB161D::BufferToPage(dataflash_buffer bufferNum, uint16_t page, uint8_t
 	DF_CS_deselect();  /* Start transfer */
 	DF_CS_select();    /* If erase was set, the page will first be erased */
 
-	/* Wait for the end of the transfer */
-	while(!(ReadStatusRegister() & READY_BUSY));
+	WaitForReady();
 
 }
 
@@ -307,8 +346,14 @@ void AT45DB161D::PageToBuffer(uint16_t page, dataflash_buffer bufferNum)
 	DF_CS_select();      /* to reset Dataflash command decoder     */
  
 	/* Send opcode */
-	m_SPI->transfer((bufferNum == 1) ? AT45DB161D_TRANSFER_PAGE_TO_BUFFER_1 :
-	                                AT45DB161D_TRANSFER_PAGE_TO_BUFFER_2);
+	if(bufferNum == DATAFLASH_BUFFER1)
+	{
+		m_SPI->transfer(AT45DB161D_TRANSFER_PAGE_TO_BUFFER_1);
+	}
+	else
+	{
+		m_SPI->transfer(AT45DB161D_TRANSFER_PAGE_TO_BUFFER_2);
+	}
 
 	/*
 	 * 3 address bytes consist of :
@@ -325,7 +370,7 @@ void AT45DB161D::PageToBuffer(uint16_t page, dataflash_buffer bufferNum)
 	DF_CS_select();
 
 	/* Wait for the end of the transfer */
-	while(!(ReadStatusRegister() & READY_BUSY));
+	WaitForReady();
 
 }
 
@@ -356,7 +401,7 @@ void AT45DB161D::PageErase(uint16_t page)
 	DF_CS_select();
 
 	/* Wait for the end of the block erase operation */
-	while(!(ReadStatusRegister() & READY_BUSY));
+	WaitForReady();
 
 }
 
@@ -386,7 +431,7 @@ void AT45DB161D::BlockErase(uint16_t block)
 	DF_CS_select();
 
 	/* Wait for the end of the block erase operation */
-	while(!(ReadStatusRegister() & READY_BUSY));
+	WaitForReady();
 
 }
 
@@ -433,7 +478,7 @@ void AT45DB161D::SectorErase(uint8_t sector)
 	DF_CS_select();
 
 	/* Wait for the end of the block erase operation */
-	while(!(ReadStatusRegister() & READY_BUSY));
+	WaitForReady();
 
 }
 
@@ -457,7 +502,7 @@ void AT45DB161D::ChipErase()
 	DF_CS_select();
 
 	/* Wait for the end of the chip erase operation */
-	while(!(ReadStatusRegister() & READY_BUSY));
+	WaitForReady();
 
 }
 #endif
@@ -477,8 +522,14 @@ void AT45DB161D::BeginPageWriteThroughBuffer(uint16_t page, uint16_t offset, dat
 	DF_CS_select();      /* to reset Dataflash command decoder     */
 
 	/* Send opcode */
-	m_SPI->transfer((bufferNum == 1) ? AT45DB161D_PAGE_THROUGH_BUFFER_1 :
-	                                AT45DB161D_PAGE_THROUGH_BUFFER_2);
+	if(bufferNum == DATAFLASH_BUFFER1)
+	{
+		m_SPI->transfer(AT45DB161D_PAGE_THROUGH_BUFFER_1);
+	}
+	else
+	{
+		m_SPI->transfer(AT45DB161D_PAGE_THROUGH_BUFFER_2);
+	}
 
 	/* Address */
 	m_SPI->transfer((uint8_t)(page >> 6));
@@ -494,13 +545,12 @@ void AT45DB161D::EndAndWait()
 {
 	DF_CS_deselect();  /* End current operation */
 	DF_CS_select();    /* Some internal operation may occur
-	                  * (buffer to page transfer, page erase, etc... ) */
+	                    * (buffer to page transfer, page erase, etc... ) */
 
 	/* Wait for the chip to be ready */
-	while(!(ReadStatusRegister() & READY_BUSY));
+	WaitForReady();
 
-
-	DF_CS_select();	/* Release SPI bus */
+	DF_CS_deselect();	/* Release SPI bus */
 }
 
 /**
@@ -518,10 +568,16 @@ int8_t AT45DB161D::ComparePageToBuffer(uint16_t page, dataflash_buffer bufferNum
 	
 	DF_CS_deselect();    /* Make sure to toggle CS signal in order */
 	DF_CS_select();      /* to reset Dataflash command decoder     */
-
+	
 	/* Send opcode */
-	m_SPI->transfer((bufferNum == 1) ? AT45DB161D_COMPARE_PAGE_TO_BUFFER_1 :
-	                                AT45DB161D_COMPARE_PAGE_TO_BUFFER_2);
+	if(bufferNum == DATAFLASH_BUFFER1)
+	{
+		m_SPI->transfer(AT45DB161D_COMPARE_PAGE_TO_BUFFER_1);
+	}
+	else
+	{
+		m_SPI->transfer(AT45DB161D_COMPARE_PAGE_TO_BUFFER_2);
+	}
 	
 	/* Page address */
 	m_SPI->transfer((uint8_t)(page >> 6));
@@ -532,14 +588,14 @@ int8_t AT45DB161D::ComparePageToBuffer(uint16_t page, dataflash_buffer bufferNum
 	DF_CS_select();
 
 	/* Wait for the end of the comparaison and get the result */
-	while(!((status = ReadStatusRegister()) & READY_BUSY));
+	while(!((status = ReadStatusRegister()) & DATAFLASH_STATUS_READY_BUSY));
 
   		
 	/* If bit 6 of the status register is 0 then the data in the
   	 * main memory page matches the data in the buffer. 
  	 * If it's 1 then the data in the main memory page doesn't match.
  	 */
-	 return ((status & COMPARE) ? 0 : 1);
+	return ((status & DATAFLASH_STATUS_COMPARE) ? 0 : 1);
 }
 
 /**
@@ -587,7 +643,7 @@ void AT45DB161D::ResumeFromDeepPowerDown()
 
 void AT45DB161D::HardReset()
 {
-	digitalWrite(m_resetPin, LOW);
+	gpio_write_bit(m_resetGPIO, m_resetPin, 0);
 
 	/* The reset pin should stay low for at least 10ms (table 18.4)*/
 	delayMicroseconds(10);
@@ -598,8 +654,8 @@ void AT45DB161D::HardReset()
 	DF_CS_deselect();
 	/* Just to be sure that the high state is reached */
 	delayMicroseconds(1);
-		
-	digitalWrite(m_resetPin, HIGH);
+	
+	gpio_write_bit(m_resetGPIO, m_resetPin, 1);
 	
 	/* Reset recovery time = 1ms */
 	delayMicroseconds(1);
